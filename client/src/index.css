@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-900 text-white;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-lg font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-600 hover:bg-primary-700 text-white focus:ring-primary-500;
+  }
+
+  .btn-secondary {
+    @apply btn bg-secondary-600 hover:bg-secondary-700 text-white focus:ring-secondary-500;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 hover:bg-red-700 text-white focus:ring-red-500;
+  }
+
+  .btn-success {
+    @apply btn bg-green-600 hover:bg-green-700 text-white focus:ring-green-500;
+  }
+
+  .card {
+    @apply bg-gray-800 rounded-lg shadow-lg border border-gray-700;
+  }
+
+  .input {
+    @apply w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500;
+  }
+
+  .monster-card {
+    @apply card p-4 hover:bg-gray-800 transition-colors cursor-pointer border-2 border-transparent hover:border-primary-500;
+  }
+
+  .monster-card.selected {
+    @apply border-primary-500 bg-gray-800;
+  }
+
+  .rarity-common {
+    @apply border-gray-400 bg-gray-500;
+  }
+
+  .rarity-rare {
+    @apply border-blue-400 bg-blue-500;
+  }
+
+  .rarity-epic {
+    @apply border-purple-400 bg-purple-500;
+  }
+
+  .rarity-legendary {
+    @apply border-yellow-400 bg-yellow-500;
+  }
+
+  .element-fire {
+    @apply text-red-400;
+  }
+
+  .element-water {
+    @apply text-blue-400;
+  }
+
+  .element-earth {
+    @apply text-yellow-600;
+  }
+
+  .element-air {
+    @apply text-cyan-400;
+  }
+
+  .element-dark {
+    @apply text-purple-400;
+  }
+
+  .element-light {
+    @apply text-yellow-300;
+  }
+}
