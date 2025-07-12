@@ -3,6 +3,7 @@ import { gameSocket } from '../services/socket';
 import { inventoryApi } from '../services/api';
 import { UserMonster, BattleState, CombatEvent } from '../types';
 import { useQuery } from 'react-query';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import {
   SparklesIcon,
@@ -13,6 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 const Battle: React.FC = () => {
+  const { user } = useAuth();
   const [gameState, setGameState] = useState<
     'lobby' | 'selecting' | 'waiting' | 'battle' | 'finished'
   >('lobby');
@@ -24,6 +26,7 @@ const Battle: React.FC = () => {
   const [lobbyData, setLobbyData] = useState<any>(null);
   const [lobbyMessage, setLobbyMessage] = useState<string>('');
   const [selectedTarget, setSelectedTarget] = useState<number | null>(null);
+  const [selectedSkill, setSelectedSkill] = useState<number | null>(null);
   const [isSocketConnected, setIsSocketConnected] = useState<boolean>(false);
 
   const { data: monsters, isLoading } = useQuery(
@@ -186,8 +189,92 @@ const Battle: React.FC = () => {
   };
 
   const handleSkillUse = (skillId: number) => {
-    if (!selectedTarget || !battleState) {
+    if (!battleState) {
+      toast.error('No battle in progress');
+      return;
+    }
+
+    const currentMonster =
+      battleState.turnOrder[battleState.currentMonsterIndex];
+    if (!currentMonster) {
+      toast.error('No active monster');
+      return;
+    }
+
+    // Check if it's the current user's turn
+    const isMyTurn =
+      (user?.id === battleState.player1.userId &&
+        battleState.player1.monsters.some((m) => m.id === currentMonster.id)) ||
+      (user?.id === battleState.player2.userId &&
+        battleState.player2.monsters.some((m) => m.id === currentMonster.id));
+
+    if (!isMyTurn) {
+      toast.error("It's not your turn");
+      return;
+    }
+
+    // If no skill selected yet, select this skill
+    if (!selectedSkill) {
+      setSelectedSkill(skillId);
+      toast('Skill selected! Now choose a target.');
+      return;
+    }
+
+    // If skill already selected and no target, require target selection
+    if (!selectedTarget) {
       toast.error('Please select a target first');
+      return;
+    }
+
+    console.log(
+      `🎯 Using skill ${selectedSkill} with monster ${currentMonster.id} on target ${selectedTarget}`
+    );
+
+    // Use the selected skill on the selected target
+    gameSocket.useSkill(selectedSkill, selectedTarget, currentMonster.id);
+
+    // Reset selections
+    setSelectedSkill(null);
+    setSelectedTarget(null);
+  };
+
+  const handleSkillSelect = (skillId: number) => {
+    if (!battleState) return;
+
+    const currentMonster =
+      battleState.turnOrder[battleState.currentMonsterIndex];
+    if (!currentMonster) return;
+
+    // Check if it's the current user's turn
+    const isMyTurn =
+      (user?.id === battleState.player1.userId &&
+        battleState.player1.monsters.some((m) => m.id === currentMonster.id)) ||
+      (user?.id === battleState.player2.userId &&
+        battleState.player2.monsters.some((m) => m.id === currentMonster.id));
+
+    if (!isMyTurn) {
+      toast.error("It's not your turn");
+      return;
+    }
+
+    setSelectedSkill(skillId);
+    setSelectedTarget(null); // Reset target when selecting new skill
+    toast('Skill selected! Now choose a target.');
+  };
+
+  const handleTargetSelect = (monsterId: number) => {
+    if (!selectedSkill) {
+      toast.error('Please select a skill first');
+      return;
+    }
+
+    setSelectedTarget(monsterId);
+    toast('Target selected! Click "Attack" to execute.');
+  };
+
+  const executeAttack = () => {
+    if (!selectedSkill || !selectedTarget || !battleState) {
+      toast.error('Please select both a skill and target');
       return;
     }
 
@@ -199,13 +286,13 @@ const Battle: React.FC = () => {
     }
 
     console.log(
-      `🎯 Using skill ${skillId} with monster ${currentMonster.id} on target ${selectedTarget}`
+      `🎯 Using skill ${selectedSkill} with monster ${currentMonster.id} on target ${selectedTarget}`
     );
 
-    // Use the public useSkill method
-    gameSocket.useSkill(skillId, selectedTarget, currentMonster.id);
+    gameSocket.useSkill(selectedSkill, selectedTarget, currentMonster.id);
 
-    // Reset target selection
+    // Reset selections
+    setSelectedSkill(null);
     setSelectedTarget(null);
   };
 
@@ -439,12 +526,14 @@ const Battle: React.FC = () => {
 
       {/* Battle State */}
       {gameState === 'battle' && battleState && (
-        <div className='max-w-7xl mx-auto'>
+        <div className='fixed inset-0 bg-gray-900 flex flex-col overflow-hidden'>
           {/* Battle Header */}
-          <div className='card p-4 mb-6'>
-            <div className='flex justify-between items-center'>
+          <div className='bg-gray-800 border-b border-gray-700 p-4 flex-shrink-0'>
+            <div className='flex justify-between items-center max-w-7xl mx-auto'>
               <h3 className='text-xl font-bold text-white'>
-                {battleState.player1.username} vs {battleState.player2.username}
+                {user?.id === battleState.player1.userId
+                  ? `${battleState.player1.username} vs ${battleState.player2.username}`
+                  : `${battleState.player2.username} vs ${battleState.player1.username}`}
               </h3>
               <div className='flex items-center space-x-4'>
                 <span className='text-yellow-400'>
@@ -460,173 +549,344 @@ const Battle: React.FC = () => {
             </div>
           </div>
 
-          {/* Battle Field */}
-          <div className='grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6'>
+          {/* Battle Arena */}
+          <div className='flex-1 flex'>
             {/* Your Monsters (Left Side) */}
-            <div className='lg:col-span-2'>
-              <h4 className='text-lg font-semibold text-white mb-3 text-center'>
+            <div className='w-1/2 p-6 flex flex-col'>
+              <h4 className='text-lg font-semibold text-white mb-4 text-center'>
                 Your Monsters
               </h4>
-              <div className='space-y-4'>
-                {battleState.player1.monsters.map((monster) => (
-                  <div
-                    key={monster.id}
-                    className={`card p-4 transition-all ${
-                      monster.currentHp > 0
-                        ? 'bg-gray-800'
-                        : 'bg-gray-900 opacity-50'
-                    } ${
-                      battleState.turnOrder[battleState.currentMonsterIndex]
-                        ?.id === monster.id
-                        ? 'ring-2 ring-blue-400 bg-blue-900/20'
-                        : ''
-                    }`}
-                  >
-                    <div className='flex justify-between items-start mb-2'>
-                      <div>
-                        <h5 className='font-medium text-white'>
-                          {monster.name}
-                        </h5>
-                        <p className='text-sm text-gray-400'>
-                          Level {monster.level}
-                        </p>
-                      </div>
-                      <div className='text-right'>
-                        <p className='text-sm text-gray-400'>
-                          Speed: {monster.speed}
-                        </p>
-                        <div
-                          className={`w-2 h-2 rounded-full ${
-                            monster.currentHp > 0
-                              ? 'bg-green-400'
-                              : 'bg-red-400'
-                          }`}
-                        ></div>
-                      </div>
-                    </div>
+              <div className='flex-1 grid grid-cols-1 gap-4 auto-rows-max'>
+                {/* Show current user's monsters (could be player1 or player2 depending on who's viewing) */}
+                {(user?.id === battleState.player1.userId
+                  ? battleState.player1.monsters
+                  : battleState.player2.monsters
+                ).map((monster) => {
+                  const isCurrentTurn =
+                    battleState.turnOrder[battleState.currentMonsterIndex]
+                      ?.id === monster.id;
+                  const currentMonster =
+                    battleState.turnOrder[battleState.currentMonsterIndex];
+                  const isMyTurn =
+                    currentMonster &&
+                    ((user?.id === battleState.player1.userId &&
+                      battleState.player1.monsters.some(
+                        (m) => m.id === currentMonster.id
+                      )) ||
+                      (user?.id === battleState.player2.userId &&
+                        battleState.player2.monsters.some(
+                          (m) => m.id === currentMonster.id
+                        )));
 
-                    {/* HP Bar */}
-                    <div className='mb-2'>
-                      <div className='flex justify-between text-sm mb-1'>
-                        <span className='text-gray-400'>HP</span>
-                        <span className='text-white'>
-                          {monster.currentHp}/{monster.hp}
-                        </span>
-                      </div>
-                      <div className='w-full bg-gray-700 rounded-full h-2'>
-                        <div
-                          className='bg-red-500 h-2 rounded-full transition-all'
-                          style={{
-                            width: `${Math.max(
-                              0,
-                              (monster.currentHp / monster.hp) * 100
-                            )}%`,
-                          }}
-                        ></div>
-                      </div>
-                    </div>
+                  return (
+                    <div
+                      key={monster.id}
+                      className={`bg-gray-800 rounded-lg p-4 border-2 transition-all ${
+                        monster.currentHp > 0
+                          ? 'border-gray-600'
+                          : 'border-gray-700 opacity-50'
+                      } ${
+                        isCurrentTurn && isMyTurn
+                          ? 'border-green-400 bg-green-900/20 shadow-lg shadow-green-500/20 ring-2 ring-green-400/50'
+                          : isCurrentTurn
+                          ? 'border-blue-400 bg-blue-900/20 shadow-lg shadow-blue-500/20'
+                          : ''
+                      }`}
+                    >
+                      <div className='flex items-start space-x-4'>
+                        {/* Monster Image */}
+                        <div className='w-16 h-16 rounded-lg overflow-hidden bg-gray-700 border border-gray-600 flex items-center justify-center flex-shrink-0'>
+                          {monster.template?.imageUrl ? (
+                            <img
+                              src={`http://localhost:3000${monster.template.imageUrl}`}
+                              alt={monster.name}
+                              className='w-full h-full object-cover'
+                              onError={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                target.style.display = 'none';
+                                target.nextElementSibling?.classList.remove(
+                                  'hidden'
+                                );
+                              }}
+                            />
+                          ) : null}
+                          <div
+                            className={`text-xl ${
+                              monster.template?.imageUrl ? 'hidden' : ''
+                            }`}
+                          >
+                            {monster.element === 'fire' && '🔥'}
+                            {monster.element === 'water' && '💧'}
+                            {monster.element === 'earth' && '🌍'}
+                            {monster.element === 'air' && '💨'}
+                            {monster.element === 'dark' && '🌙'}
+                            {monster.element === 'ice' && '❄️'}
+                            {monster.element === 'electric' && '⚡'}
+                            {monster.element === 'crystal' && '💎'}
+                            {monster.element &&
+                              ![
+                                'fire',
+                                'water',
+                                'earth',
+                                'air',
+                                'dark',
+                                'ice',
+                                'electric',
+                                'crystal',
+                              ].includes(monster.element) &&
+                              '👾'}
+                          </div>
+                        </div>
 
-                    {/* Stats */}
-                    <div className='grid grid-cols-3 gap-2 text-xs text-gray-400'>
-                      <div>STR: {monster.strength}</div>
-                      <div>SPD: {monster.speed}</div>
-                      <div>ABL: {monster.ability}</div>
+                        {/* Monster Info */}
+                        <div className='flex-1 min-w-0'>
+                          <div className='flex justify-between items-start mb-2'>
+                            <div>
+                              <h5 className='font-medium text-white truncate'>
+                                {monster.name}
+                              </h5>
+                              <p className='text-sm text-gray-400'>
+                                Level {monster.level}
+                              </p>
+                            </div>
+                            <div className='text-right'>
+                              <div
+                                className={`w-2 h-2 rounded-full ${
+                                  monster.currentHp > 0
+                                    ? 'bg-green-400'
+                                    : 'bg-red-400'
+                                }`}
+                              ></div>
+                            </div>
+                          </div>
+
+                          {/* HP Bar */}
+                          <div className='mb-3'>
+                            <div className='flex justify-between text-xs mb-1'>
+                              <span className='text-gray-400'>HP</span>
+                              <span className='text-white'>
+                                {monster.currentHp}/
+                                {monster.maxHp || monster.hp || 0}
+                              </span>
+                            </div>
+                            <div className='w-full bg-gray-700 rounded-full h-2'>
+                              <div
+                                className='bg-red-500 h-2 rounded-full transition-all'
+                                style={{
+                                  width: `${Math.max(
+                                    0,
+                                    (monster.currentHp /
+                                      (monster.maxHp || monster.hp || 1)) *
+                                      100
+                                  )}%`,
+                                }}
+                              ></div>
+                            </div>
+                          </div>
+
+                          {/* Skills */}
+                          {monster.skills &&
+                            monster.skills.length > 0 &&
+                            isCurrentTurn && (
+                              <div className='space-y-2'>
+                                <div className='text-xs text-gray-400 font-medium'>
+                                  Skills:
+                                </div>
+                                <div className='grid grid-cols-2 gap-1'>
+                                  {monster.skills.slice(0, 4).map((skill) => (
+                                    <button
+                                      key={skill.id}
+                                      className={`text-xs p-2 rounded border transition-all ${
+                                        selectedSkill === skill.id
+                                          ? 'bg-green-600 border-green-500 text-white ring-1 ring-green-400'
+                                          : isMyTurn
+                                          ? 'bg-blue-600 border-blue-500 text-white hover:bg-blue-700'
+                                          : 'bg-gray-700 border-gray-600 text-gray-400 cursor-not-allowed'
+                                      }`}
+                                      onClick={() =>
+                                        handleSkillSelect(skill.id)
+                                      }
+                                      disabled={!isMyTurn || timeRemaining <= 0}
+                                    >
+                                      <div className='font-medium truncate'>
+                                        {skill.name}
+                                      </div>
+                                      <div className='text-yellow-400'>
+                                        DMG: {skill.damage}
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
+
+                                {/* Attack Button */}
+                                {selectedSkill &&
+                                  selectedTarget &&
+                                  isMyTurn && (
+                                    <button
+                                      onClick={executeAttack}
+                                      className='w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded text-sm transition-colors'
+                                    >
+                                      🗡️ ATTACK!
+                                    </button>
+                                  )}
+                              </div>
+                            )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
-            {/* Battle Center */}
-            <div className='lg:col-span-1 flex flex-col justify-center items-center'>
-              <div className='text-center'>
-                <div className='text-4xl mb-4'>⚔️</div>
-                <div className='text-sm text-gray-400 mb-2'>Current Turn</div>
-                {battleState.turnOrder[battleState.currentMonsterIndex] && (
-                  <div className='text-lg font-semibold text-yellow-400'>
-                    {
-                      battleState.turnOrder[battleState.currentMonsterIndex]
-                        .name
-                    }
-                  </div>
-                )}
-              </div>
-            </div>
+            {/* VS Divider */}
+            <div className='w-px bg-gray-700 flex-shrink-0'></div>
 
             {/* Opponent Monsters (Right Side) */}
-            <div className='lg:col-span-2'>
-              <h4 className='text-lg font-semibold text-white mb-3 text-center'>
-                {battleState.player2.username}'s Monsters
+            <div className='w-1/2 p-6 flex flex-col'>
+              <h4 className='text-lg font-semibold text-white mb-4 text-center'>
+                {user?.id === battleState.player1.userId
+                  ? battleState.player2.username
+                  : battleState.player1.username}
+                's Monsters
               </h4>
-              <div className='space-y-4'>
-                {battleState.player2.monsters.map((monster) => (
+              <div className='flex-1 grid grid-cols-1 gap-4 auto-rows-max'>
+                {/* Show opponent's monsters (inverted based on who's viewing) */}
+                {(user?.id === battleState.player1.userId
+                  ? battleState.player2.monsters
+                  : battleState.player1.monsters
+                ).map((monster) => (
                   <div
                     key={monster.id}
-                    className={`card p-4 transition-all cursor-pointer ${
+                    className={`bg-gray-800 rounded-lg p-4 border-2 transition-all cursor-pointer ${
                       monster.currentHp > 0
-                        ? 'bg-gray-800 hover:bg-gray-700'
-                        : 'bg-gray-900 opacity-50'
+                        ? 'border-gray-600 hover:border-red-400'
+                        : 'border-gray-700 opacity-50 cursor-not-allowed'
                     } ${
                       battleState.turnOrder[battleState.currentMonsterIndex]
                         ?.id === monster.id
-                        ? 'ring-2 ring-red-400 bg-red-900/20'
+                        ? 'border-red-400 bg-red-900/20 shadow-lg shadow-red-500/20'
+                        : ''
+                    } ${
+                      selectedTarget === monster.id
+                        ? 'border-yellow-400 bg-yellow-900/20'
                         : ''
                     }`}
                     onClick={() => {
-                      if (monster.currentHp > 0) {
-                        setSelectedTarget(monster.id);
+                      if (monster.currentHp > 0 && selectedSkill) {
+                        handleTargetSelect(monster.id);
+                      } else if (!selectedSkill) {
+                        toast.error('Please select a skill first');
                       }
                     }}
                   >
-                    <div className='flex justify-between items-start mb-2'>
-                      <div>
-                        <h5 className='font-medium text-white'>
-                          {monster.name}
-                        </h5>
-                        <p className='text-sm text-gray-400'>
-                          Level {monster.level}
-                        </p>
-                      </div>
-                      <div className='text-right'>
-                        <p className='text-sm text-gray-400'>
-                          Speed: {monster.speed}
-                        </p>
+                    <div className='flex items-start space-x-4'>
+                      {/* Monster Image */}
+                      <div className='w-16 h-16 rounded-lg overflow-hidden bg-gray-700 border border-gray-600 flex items-center justify-center flex-shrink-0'>
+                        {monster.template?.imageUrl ? (
+                          <img
+                            src={`http://localhost:3000${monster.template.imageUrl}`}
+                            alt={monster.name}
+                            className='w-full h-full object-cover'
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                              target.nextElementSibling?.classList.remove(
+                                'hidden'
+                              );
+                            }}
+                          />
+                        ) : null}
                         <div
-                          className={`w-2 h-2 rounded-full ${
-                            monster.currentHp > 0
-                              ? 'bg-green-400'
-                              : 'bg-red-400'
+                          className={`text-xl ${
+                            monster.template?.imageUrl ? 'hidden' : ''
                           }`}
-                        ></div>
+                        >
+                          {monster.element === 'fire' && '🔥'}
+                          {monster.element === 'water' && '💧'}
+                          {monster.element === 'earth' && '🌍'}
+                          {monster.element === 'air' && '💨'}
+                          {monster.element === 'dark' && '🌙'}
+                          {monster.element === 'ice' && '❄️'}
+                          {monster.element === 'electric' && '⚡'}
+                          {monster.element === 'crystal' && '💎'}
+                          {monster.element &&
+                            ![
+                              'fire',
+                              'water',
+                              'earth',
+                              'air',
+                              'dark',
+                              'ice',
+                              'electric',
+                              'crystal',
+                            ].includes(monster.element) &&
+                            '👾'}
+                        </div>
                       </div>
-                    </div>
 
-                    {/* HP Bar */}
-                    <div className='mb-2'>
-                      <div className='flex justify-between text-sm mb-1'>
-                        <span className='text-gray-400'>HP</span>
-                        <span className='text-white'>
-                          {monster.currentHp}/{monster.hp}
-                        </span>
-                      </div>
-                      <div className='w-full bg-gray-700 rounded-full h-2'>
-                        <div
-                          className='bg-red-500 h-2 rounded-full transition-all'
-                          style={{
-                            width: `${Math.max(
-                              0,
-                              (monster.currentHp / monster.hp) * 100
-                            )}%`,
-                          }}
-                        ></div>
-                      </div>
-                    </div>
+                      {/* Monster Info */}
+                      <div className='flex-1 min-w-0'>
+                        <div className='flex justify-between items-start mb-2'>
+                          <div>
+                            <h5 className='font-medium text-white truncate'>
+                              {monster.name}
+                            </h5>
+                            <p className='text-sm text-gray-400'>
+                              Level {monster.level}
+                            </p>
+                          </div>
+                          <div className='text-right'>
+                            <div
+                              className={`w-2 h-2 rounded-full ${
+                                monster.currentHp > 0
+                                  ? 'bg-green-400'
+                                  : 'bg-red-400'
+                              }`}
+                            ></div>
+                          </div>
+                        </div>
 
-                    {/* Stats */}
-                    <div className='grid grid-cols-3 gap-2 text-xs text-gray-400'>
-                      <div>STR: {monster.strength}</div>
-                      <div>SPD: {monster.speed}</div>
-                      <div>ABL: {monster.ability}</div>
+                        {/* HP Bar */}
+                        <div className='mb-3'>
+                          <div className='flex justify-between text-xs mb-1'>
+                            <span className='text-gray-400'>HP</span>
+                            <span className='text-white'>
+                              {monster.currentHp}/
+                              {monster.maxHp || monster.hp || 0}
+                            </span>
+                          </div>
+                          <div className='w-full bg-gray-700 rounded-full h-2'>
+                            <div
+                              className='bg-red-500 h-2 rounded-full transition-all'
+                              style={{
+                                width: `${Math.max(
+                                  0,
+                                  (monster.currentHp /
+                                    (monster.maxHp || monster.hp || 1)) *
+                                    100
+                                )}%`,
+                              }}
+                            ></div>
+                          </div>
+                        </div>
+
+                        {/* Stats Display */}
+                        <div className='grid grid-cols-3 gap-2 text-xs text-gray-400'>
+                          <div className='flex items-center space-x-1'>
+                            <SparklesIcon className='h-3 w-3' />
+                            <span>{monster.strength}</span>
+                          </div>
+                          <div className='flex items-center space-x-1'>
+                            <BoltIcon className='h-3 w-3' />
+                            <span>{monster.speed}</span>
+                          </div>
+                          <div className='flex items-center space-x-1'>
+                            <ShieldCheckIcon className='h-3 w-3' />
+                            <span>{monster.ability}</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -634,74 +894,123 @@ const Battle: React.FC = () => {
             </div>
           </div>
 
-          {/* Skills Panel */}
-          {battleState.turnOrder[battleState.currentMonsterIndex] && (
-            <div className='card p-6'>
-              <h4 className='text-lg font-semibold text-white mb-4'>
-                {battleState.turnOrder[battleState.currentMonsterIndex].name}'s
-                Skills
-              </h4>
-              <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
-                {battleState.turnOrder[
-                  battleState.currentMonsterIndex
-                ].skills?.map((skill) => (
-                  <button
-                    key={skill.id}
-                    className='btn-primary p-4 text-left'
-                    onClick={() => handleSkillUse(skill.id)}
-                    disabled={!selectedTarget || timeRemaining <= 0}
-                  >
-                    <div className='font-semibold mb-1'>{skill.name}</div>
-                    <div className='text-sm text-gray-300 mb-2'>
-                      {skill.description}
-                    </div>
-                    <div className='text-xs text-yellow-400'>
-                      DMG: {skill.damage}
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              {selectedTarget && (
-                <div className='mt-4 text-center text-sm text-gray-400'>
-                  Target selected. Choose a skill to attack!
+          {/* Bottom User Info Bar */}
+          <div className='bg-gray-800 border-t border-gray-700 p-4 flex-shrink-0'>
+            <div className='max-w-7xl mx-auto'>
+              <div className='flex items-center justify-between'>
+                {/* Current Turn Info */}
+                <div className='flex items-center space-x-4'>
+                  {battleState.turnOrder[battleState.currentMonsterIndex] && (
+                    <>
+                      <div className='text-yellow-400 font-medium'>
+                        Current Turn:{' '}
+                        {
+                          battleState.turnOrder[battleState.currentMonsterIndex]
+                            .name
+                        }
+                      </div>
+                      {timeRemaining > 0 && (
+                        <div className='flex items-center text-red-400'>
+                          <ClockIcon className='h-4 w-4 mr-1' />
+                          <span className='font-mono'>{timeRemaining}s</span>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
-              )}
 
-              {!selectedTarget && (
-                <div className='mt-4 text-center text-sm text-gray-400'>
-                  Click on an enemy monster to select target, then choose a
-                  skill.
+                {/* Action Instructions */}
+                <div className='text-center'>
+                  {!selectedSkill && !selectedTarget ? (
+                    <div className='text-gray-400 text-sm'>
+                      {battleState.turnOrder[battleState.currentMonsterIndex] &&
+                      ((user?.id === battleState.player1.userId &&
+                        battleState.player1.monsters.some(
+                          (m) =>
+                            m.id ===
+                            battleState.turnOrder[
+                              battleState.currentMonsterIndex
+                            ].id
+                        )) ||
+                        (user?.id === battleState.player2.userId &&
+                          battleState.player2.monsters.some(
+                            (m) =>
+                              m.id ===
+                              battleState.turnOrder[
+                                battleState.currentMonsterIndex
+                              ].id
+                          )))
+                        ? 'Your turn! Select a skill from your active monster.'
+                        : "Opponent's turn. Waiting for their move..."}
+                    </div>
+                  ) : selectedSkill && !selectedTarget ? (
+                    <div className='text-yellow-400 text-sm'>
+                      Skill selected! Click on an enemy monster to target.
+                    </div>
+                  ) : selectedSkill && selectedTarget ? (
+                    <div className='text-green-400 text-sm'>
+                      Ready to attack! Click the "ATTACK!" button to execute.
+                    </div>
+                  ) : (
+                    <div className='text-gray-400 text-sm'>
+                      Select a skill and target to attack.
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
 
-          {/* Combat Log */}
-          {combatEvents.length > 0 && (
-            <div className='card p-6 mt-6'>
-              <h4 className='text-lg font-semibold text-white mb-4'>
-                Combat Log
-              </h4>
-              <div className='max-h-32 overflow-y-auto space-y-2'>
-                {combatEvents.slice(-5).map((event) => (
-                  <div
-                    key={event.id}
-                    className={`text-sm p-2 rounded ${
-                      event.isAutoAction
-                        ? 'bg-gray-800 text-gray-300'
-                        : 'bg-blue-900/30 text-blue-200'
-                    }`}
-                  >
-                    {event.description}
-                    {event.isAutoAction && (
-                      <span className='text-yellow-400 ml-2'>(Auto)</span>
-                    )}
+                {/* Battle Stats */}
+                <div className='flex items-center space-x-6 text-sm'>
+                  <div className='text-blue-400'>
+                    Your Monsters:{' '}
+                    {
+                      (user?.id === battleState.player1.userId
+                        ? battleState.player1.monsters
+                        : battleState.player2.monsters
+                      ).filter((m) => m.currentHp > 0).length
+                    }
+                    /
+                    {user?.id === battleState.player1.userId
+                      ? battleState.player1.monsters.length
+                      : battleState.player2.monsters.length}
                   </div>
-                ))}
+                  <div className='text-red-400'>
+                    Enemy Monsters:{' '}
+                    {
+                      (user?.id === battleState.player1.userId
+                        ? battleState.player2.monsters
+                        : battleState.player1.monsters
+                      ).filter((m) => m.currentHp > 0).length
+                    }
+                    /
+                    {user?.id === battleState.player1.userId
+                      ? battleState.player2.monsters.length
+                      : battleState.player1.monsters.length}
+                  </div>
+                </div>
               </div>
+
+              {/* Combat Log */}
+              {combatEvents.length > 0 && (
+                <div className='mt-3 bg-gray-900 rounded-lg p-3'>
+                  <div className='text-sm text-gray-300 max-h-16 overflow-y-auto space-y-1'>
+                    {combatEvents.slice(-3).map((event) => (
+                      <div
+                        key={event.id}
+                        className={`${
+                          event.isAutoAction ? 'text-gray-400' : 'text-blue-200'
+                        }`}
+                      >
+                        {event.description}
+                        {event.isAutoAction && (
+                          <span className='text-yellow-400 ml-2'>(Auto)</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       )}
 

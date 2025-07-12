@@ -9,7 +9,7 @@ export class MonsterRepository {
         um.experience, um.hp, um.strength, um.speed, um.ability, um.is_favorite,
         um.created_at, um.updated_at,
         mt.name as template_name, mt.base_hp, mt.base_strength, mt.base_speed, 
-        mt.base_ability, mt.rarity, mt.element, mt.description
+        mt.base_ability, mt.rarity, mt.element, mt.description, mt.image_url
       FROM user_monsters um
       JOIN monster_templates mt ON um.template_id = mt.id
       WHERE um.user_id = $1
@@ -44,6 +44,7 @@ export class MonsterRepository {
           rarity: row.rarity,
           element: row.element,
           description: row.description,
+          imageUrl: row.image_url,
           skills,
         },
         equipment: [], // Will be populated separately if needed
@@ -113,7 +114,7 @@ export class MonsterRepository {
         um.experience, um.hp, um.strength, um.speed, um.ability, um.is_favorite,
         um.created_at, um.updated_at,
         mt.name as template_name, mt.base_hp, mt.base_strength, mt.base_speed, 
-        mt.base_ability, mt.rarity, mt.element, mt.description
+        mt.base_ability, mt.rarity, mt.element, mt.description, mt.image_url
       FROM user_monsters um
       JOIN monster_templates mt ON um.template_id = mt.id
       WHERE um.user_id = $1 AND um.id = $2
@@ -150,6 +151,7 @@ export class MonsterRepository {
         rarity: row.rarity,
         element: row.element,
         description: row.description,
+        imageUrl: row.image_url,
         skills,
       },
       equipment: [], // Will be populated separately if needed
@@ -271,7 +273,7 @@ export class MonsterRepository {
 
   async getAvailableMonsterTemplates(): Promise<MonsterTemplate[]> {
     const query = `
-      SELECT id, name, base_hp, base_strength, base_speed, base_ability, rarity, element
+      SELECT id, name, base_hp, base_strength, base_speed, base_ability, rarity, element, description, image_url
       FROM monster_templates
       ORDER BY rarity, name
     `;
@@ -291,6 +293,8 @@ export class MonsterRepository {
         baseAbility: row.base_ability,
         rarity: row.rarity,
         element: row.element,
+        description: row.description,
+        imageUrl: row.image_url,
         skills,
       });
     }

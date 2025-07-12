@@ -126,6 +126,49 @@ const MonsterManagement: React.FC = () => {
                 key={monster.id}
                 className='card p-6 hover:bg-gray-800 transition-colors'
               >
+                {/* Monster Image */}
+                <div className='mb-4 flex justify-center'>
+                  <div className='w-24 h-24 rounded-lg overflow-hidden bg-gray-700 border-2 border-gray-600 flex items-center justify-center'>
+                    {monster.template.imageUrl ? (
+                      <img
+                        src={`http://localhost:3000${monster.template.imageUrl}`}
+                        alt={monster.template.name}
+                        className='w-full h-full object-cover'
+                        onError={(e) => {
+                          // Fallback to emoji if image fails to load
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          target.nextElementSibling?.classList.remove('hidden');
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className={`text-2xl ${
+                        monster.template.imageUrl ? 'hidden' : ''
+                      }`}
+                    >
+                      {monster.template.element === 'fire' && '🔥'}
+                      {monster.template.element === 'water' && '💧'}
+                      {monster.template.element === 'earth' && '🌍'}
+                      {monster.template.element === 'air' && '💨'}
+                      {monster.template.element === 'dark' && '🌙'}
+                      {monster.template.element === 'ice' && '❄️'}
+                      {monster.template.element === 'electric' && '⚡'}
+                      {monster.template.element === 'crystal' && '💎'}
+                      {![
+                        'fire',
+                        'water',
+                        'earth',
+                        'air',
+                        'dark',
+                        'ice',
+                        'electric',
+                        'crystal',
+                      ].includes(monster.template.element) && '👾'}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Monster Header */}
                 <div className='flex justify-between items-start mb-4'>
                   <div className='flex-1'>

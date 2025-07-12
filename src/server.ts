@@ -79,6 +79,9 @@ app.use('/api/', limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Serve static files (images)
+app.use('/images', express.static('public/images'));
+
 // Handle 431 errors specifically
 app.use(
   (

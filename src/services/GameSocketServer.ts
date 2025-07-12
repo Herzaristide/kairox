@@ -293,16 +293,31 @@ export class GameSocketServer {
   private convertToBattleMonster = (monster: any): BattleMonster => {
     return {
       id: monster.id,
+      userId: 0, // Will be set by the calling function
       templateId: monster.monsterTemplateId || monster.template_id,
       name: monster.nickname || monster.template.name,
+      nickname: monster.nickname,
       level: monster.level,
-      hp: monster.hp,
+      maxHp: monster.hp,
       currentHp: monster.hp,
       strength: monster.strength,
       speed: monster.speed,
       ability: monster.ability,
-      element: monster.template.element,
-      rarity: monster.template.rarity,
+      position: 1, // Will be set by the calling function
+      isAlive: true,
+      template: {
+        id: monster.template.id,
+        name: monster.template.name,
+        baseHp: monster.template.baseHp,
+        baseStrength: monster.template.baseStrength,
+        baseSpeed: monster.template.baseSpeed,
+        baseAbility: monster.template.baseAbility,
+        rarity: monster.template.rarity,
+        element: monster.template.element,
+        description: monster.template.description,
+        imageUrl: monster.template.imageUrl,
+        skills: [],
+      },
       skills: [
         {
           id: 1,
@@ -313,6 +328,9 @@ export class GameSocketServer {
           effectType: 'damage',
           effectValue: 0,
           element: monster.template.element,
+          lastUsedTurn: 0,
+          isOnCooldown: false,
+          remainingCooldown: 0,
         },
         {
           id: 2,
@@ -323,11 +341,12 @@ export class GameSocketServer {
           effectType: 'damage',
           effectValue: 0,
           element: monster.template.element,
+          lastUsedTurn: 0,
+          isOnCooldown: false,
+          remainingCooldown: 0,
         },
       ],
-      effects: [],
       equipment: [],
-      skillCooldowns: {},
     };
   };
 

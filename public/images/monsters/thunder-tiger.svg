@@ -1,0 +1,11 @@
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="electricGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#fdcb6e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e17055;stop-opacity:1" />
+    </radialGradient>
+  </defs>
+  <rect width="200" height="200" fill="url(#electricGradient)" rx="10"/>
+  <text x="100" y="95" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="16" font-weight="bold">⚡</text>
+  <text x="100" y="125" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="12">Thunder Tiger</text>
+</svg>

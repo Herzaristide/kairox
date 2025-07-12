@@ -36,6 +36,7 @@ export const setupDatabase = async (reset: boolean = false): Promise<void> => {
         base_speed INTEGER NOT NULL,
         base_ability INTEGER NOT NULL,
         description TEXT,
+        image_url VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -90,6 +91,21 @@ export const setupDatabase = async (reset: boolean = false): Promise<void> => {
       `);
     }
 
+    // Check if image_url column exists in monster_templates, if not add it
+    const imageUrlColumnCheck = await pgPool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'monster_templates' AND column_name = 'image_url'
+    `);
+
+    if (imageUrlColumnCheck.rows.length === 0) {
+      console.log('🔧 Adding missing image_url column to monster_templates...');
+      await pgPool.query(`
+        ALTER TABLE monster_templates 
+        ADD COLUMN image_url VARCHAR(255)
+      `);
+    }
+
     // Create equipment_templates table
     await pgPool.query(`
       CREATE TABLE IF NOT EXISTS equipment_templates (
@@ -135,16 +151,16 @@ export const setupDatabase = async (reset: boolean = false): Promise<void> => {
 
       // Insert sample monsters
       await pgPool.query(`
-        INSERT INTO monster_templates (name, element, rarity, base_hp, base_strength, base_speed, base_ability, description)
+        INSERT INTO monster_templates (name, element, rarity, base_hp, base_strength, base_speed, base_ability, description, image_url)
         VALUES 
-        ('Fire Drake', 'fire', 'rare', 120, 85, 70, 60, 'A fierce dragon with burning breath'),
-        ('Water Spirit', 'water', 'common', 100, 60, 90, 80, 'A gentle spirit that controls water'),
-        ('Earth Guardian', 'earth', 'epic', 180, 100, 40, 90, 'A mighty guardian of the earth'),
-        ('Wind Falcon', 'air', 'rare', 90, 75, 120, 70, 'Swift as the wind itself'),
-        ('Shadow Wolf', 'dark', 'legendary', 150, 110, 95, 85, 'A mysterious wolf from the shadows'),
-        ('Ice Phoenix', 'ice', 'epic', 130, 90, 110, 95, 'A majestic phoenix of ice and snow'),
-        ('Thunder Tiger', 'electric', 'rare', 110, 95, 100, 75, 'A fierce tiger crackling with electricity'),
-        ('Crystal Golem', 'crystal', 'common', 140, 70, 50, 100, 'A sturdy golem made of pure crystal')
+        ('Fire Drake', 'fire', 'rare', 120, 85, 70, 60, 'A fierce dragon with burning breath', '/images/monsters/fire-drake.svg'),
+        ('Water Spirit', 'water', 'common', 100, 60, 90, 80, 'A gentle spirit that controls water', '/images/monsters/water-spirit.svg'),
+        ('Earth Guardian', 'earth', 'epic', 180, 100, 40, 90, 'A mighty guardian of the earth', '/images/monsters/earth-guardian.svg'),
+        ('Wind Falcon', 'air', 'rare', 90, 75, 120, 70, 'Swift as the wind itself', '/images/monsters/wind-falcon.svg'),
+        ('Shadow Wolf', 'dark', 'legendary', 150, 110, 95, 85, 'A mysterious wolf from the shadows', '/images/monsters/shadow-wolf.svg'),
+        ('Ice Phoenix', 'ice', 'epic', 130, 90, 110, 95, 'A majestic phoenix of ice and snow', '/images/monsters/ice-phoenix.svg'),
+        ('Thunder Tiger', 'electric', 'rare', 110, 95, 100, 75, 'A fierce tiger crackling with electricity', '/images/monsters/thunder-tiger.svg'),
+        ('Crystal Golem', 'crystal', 'common', 140, 70, 50, 100, 'A sturdy golem made of pure crystal', '/images/monsters/crystal-golem.svg')
       `);
 
       console.log('✅ Sample monsters created successfully');
@@ -177,6 +193,29 @@ export const setupDatabase = async (reset: boolean = false): Promise<void> => {
       console.log('✅ Sample equipment created successfully');
     } else {
       console.log('✅ Equipment templates already exist');
+    }
+
+    // Update existing monster templates with image URLs if they don't have them
+    const updateImageUrls = await pgPool.query(`
+      UPDATE monster_templates 
+      SET image_url = CASE 
+        WHEN name = 'Fire Drake' THEN '/images/monsters/fire-drake.svg'
+        WHEN name = 'Water Spirit' THEN '/images/monsters/water-spirit.svg'
+        WHEN name = 'Earth Guardian' THEN '/images/monsters/earth-guardian.svg'
+        WHEN name = 'Wind Falcon' THEN '/images/monsters/wind-falcon.svg'
+        WHEN name = 'Shadow Wolf' THEN '/images/monsters/shadow-wolf.svg'
+        WHEN name = 'Ice Phoenix' THEN '/images/monsters/ice-phoenix.svg'
+        WHEN name = 'Thunder Tiger' THEN '/images/monsters/thunder-tiger.svg'
+        WHEN name = 'Crystal Golem' THEN '/images/monsters/crystal-golem.svg'
+        ELSE image_url
+      END
+      WHERE image_url IS NULL OR image_url = ''
+    `);
+
+    if (updateImageUrls.rowCount && updateImageUrls.rowCount > 0) {
+      console.log(
+        `✅ Updated ${updateImageUrls.rowCount} monster templates with image URLs`
+      );
     }
   } catch (error) {
     console.error('❌ Database setup error:', error);

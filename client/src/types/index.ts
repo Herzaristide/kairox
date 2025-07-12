@@ -28,6 +28,7 @@ export interface MonsterTemplate {
     | 'electric'
     | 'crystal';
   description?: string;
+  imageUrl?: string;
   skills: Skill[];
 }
 
@@ -113,20 +114,26 @@ export interface BattlePlayer {
 
 export interface BattleMonster {
   id: number;
+  userId?: number;
   templateId: number;
   name: string;
+  nickname?: string;
   level: number;
-  hp: number;
+  maxHp?: number;
+  hp?: number;
   currentHp: number;
   strength: number;
   speed: number;
   ability: number;
-  element: string;
-  rarity: string;
+  element?: string;
+  rarity?: string;
   skills: BattleSkill[];
-  effects: any[];
+  effects?: any[];
   equipment: UserEquipment[];
-  skillCooldowns: Record<number, number>;
+  skillCooldowns?: Record<number, number>;
+  position?: number;
+  isAlive?: boolean;
+  template?: MonsterTemplate;
 }
 
 export interface BattleSkill {
@@ -138,6 +145,9 @@ export interface BattleSkill {
   effectType: 'damage' | 'heal' | 'buff' | 'debuff';
   effectValue: number;
   element: string;
+  lastUsedTurn?: number;
+  isOnCooldown?: boolean;
+  remainingCooldown?: number;
 }
 
 export interface CombatEvent {

@@ -18,6 +18,8 @@ export interface MonsterTemplate {
   baseAbility: number;
   rarity: 'common' | 'rare' | 'epic' | 'legendary';
   element: 'fire' | 'water' | 'earth' | 'air' | 'dark' | 'light';
+  description?: string;
+  imageUrl?: string;
   skills: Skill[];
 }
 
@@ -140,6 +142,7 @@ export interface BattleMonster {
   equipment: UserEquipment[];
   position: number;
   isAlive: boolean;
+  template?: MonsterTemplate;
 }
 
 export interface BattleSkill extends Skill {
